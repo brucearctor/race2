@@ -1,0 +1,16 @@
+pre-push:
+  parallel: true
+  commands:
+    tests:
+      run: uv run pytest
+      glob: "*.py"
+
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      run: uv run ruff check {staged_files}
+      glob: "*.py"
+    format:
+      run: uv run ruff format --check {staged_files}
+      glob: "*.py"

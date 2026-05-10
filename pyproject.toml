@@ -1,0 +1,39 @@
+[project]
+name = "race2"
+version = "0.1.0"
+description = "OBD-II vehicle data logger via OBDLink EX"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "obd>=0.7.1",
+    "pyserial>=3.5",
+    "rich>=13.0",       # pretty terminal output
+    "click>=8.1",       # CLI
+    "pandas>=2.0",      # data analysis on captured CSVs
+]
+
+[project.scripts]
+race2 = "race2.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=race2 --cov-report=term-missing"
