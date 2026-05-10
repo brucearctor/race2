@@ -22,6 +22,7 @@ from race2.obd_client import (
     read_dtcs,
     read_snapshot,
 )
+from race2 import server as _server
 
 console = Console()
 
@@ -175,3 +176,19 @@ def discover(ctx: click.Context, out: str | None) -> None:
     console.print(f"\n[dim]Saved → {out_path}[/dim]")
 
     conn.close()
+
+
+@main.command()
+@click.option("--demo", is_flag=True, help="Stream simulated data — no car needed.")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address.")
+@click.option("--http-port", default=8000, show_default=True, help="HTTP port.")
+@click.pass_context
+def live(ctx: click.Context, demo: bool, host: str, http_port: int) -> None:
+    """Start live SSE server → open in any browser on your network (or Pixel phone)."""
+    _server.serve(
+        port_str=ctx.obj["port"],
+        baud=ctx.obj["baud"],
+        demo=demo,
+        host=host,
+        http_port=http_port,
+    )

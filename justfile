@@ -42,3 +42,12 @@ dashboard:
 # Generate demo data for dashboard testing
 demo-data:
     uv run python3 -c "from race2.sample_data import write_sample_csv, write_sample_snapshot; from pathlib import Path; write_sample_csv(Path('sample_session.csv')); write_sample_snapshot(Path('sample_snapshot.json'))"
+
+# Start live SSE server (real OBD) — open http://<your-ip>:8000 on Pixel
+live:
+    uv run race2 live
+
+# Start live SSE server with simulated demo data (no car needed)
+live-demo:
+    uv run race2 live --demo
+

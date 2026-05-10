@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>race2 · Live</title>
+<style>
+  :root {
+    --bg: #0a0b0f;
+    --surface: #12141c;
+    --border: #1e2235;
+    --text: #e2e4f0;
+    --muted: #5a5f7a;
+    --accent: #6c72f5;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, 'SF Pro Display', 'Roboto', sans-serif; overflow-x: hidden; }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.04em; }
+  #status {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  #dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
+    transition: background 0.4s;
+  }
+  #dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  #dot.demo { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  #dot.dead { background: var(--red); }
+
+  /* ── RPM gauge ── */
+  .gauge-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 1.25rem 1rem 0.5rem;
+  }
+  canvas#rpm-gauge { max-width: 280px; width: 100%; }
+  .gauge-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-top: 0.25rem; }
+
+  /* ── Grid of metrics ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+  }
+  @media (min-width: 500px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 0.85rem 1rem;
+    display: flex; flex-direction: column; gap: 0.25rem;
+    transition: border-color 0.3s;
+  }
+  .card.warn { border-color: var(--yellow); }
+  .card.alert { border-color: var(--red); }
+  .card-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.1em; }
+  .card-value { font-size: 1.9rem; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .card-unit { font-size: 0.65rem; color: var(--muted); }
+
+  /* Fuel trim bar */
+  .trim-bar-wrap { display: flex; flex-direction: column; gap: 0.4rem; padding: 0 0.75rem 0.5rem; }
+  .trim-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.7rem; }
+  .trim-label { width: 60px; color: var(--muted); }
+  .trim-track {
+    flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
+    position: relative;
+  }
+  .trim-fill {
+    height: 100%; border-radius: 4px; transition: width 0.4s, background 0.4s;
+    position: absolute; top: 0;
+  }
+  .trim-val { width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* O2 section */
+  .o2-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;
+    padding: 0 0.75rem 0.75rem; }
+  .o2-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 0.75rem; }
+  .o2-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+  .o2-volt { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .o2-bar-wrap { height: 6px; background: var(--border); border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
+  .o2-bar { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.5s; }
+
+  .section-title {
+    font-size: 0.6rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.12em; padding: 0.5rem 0.75rem 0.25rem;
+  }
+  footer { height: 2rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏎️ race2</h1>
+  <div id="status">
+    <div id="dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<!-- RPM Arc Gauge -->
+<div class="gauge-wrap">
+  <canvas id="rpm-gauge" height="160" width="280"></canvas>
+  <div class="gauge-label">Engine RPM</div>
+</div>
+
+<!-- Core metrics -->
+<div class="grid">
+  <div class="card" id="card-speed">
+    <div class="card-label">Speed</div>
+    <div class="card-value" id="v-speed">—</div>
+    <div class="card-unit">km/h</div>
+  </div>
+  <div class="card" id="card-load">
+    <div class="card-label">Engine Load</div>
+    <div class="card-value" id="v-load">—</div>
+    <div class="card-unit">%</div>
+  </div>
+  <div class="card" id="card-coolant">
+    <div class="card-label">Coolant</div>
+    <div class="card-value" id="v-coolant">—</div>
+    <div class="card-unit">°C</div>
+  </div>
+  <div class="card" id="card-intake">
+    <div class="card-label">Intake Temp</div>
+    <div class="card-value" id="v-intake">—</div>
+    <div class="card-unit">°C</div>
+  </div>
+  <div class="card">
+    <div class="card-label">MAF</div>
+    <div class="card-value" id="v-maf">—</div>
+    <div class="card-unit">g/s</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Timing Adv.</div>
+    <div class="card-value" id="v-timing">—</div>
+    <div class="card-unit">°</div>
+  </div>
+</div>
+
+<!-- Fuel trims -->
+<div class="section-title">Fuel Trims</div>
+<div class="trim-bar-wrap">
+  <div class="trim-row">
+    <div class="trim-label">STFT B1</div>
+    <div class="trim-track"><div class="trim-fill" id="stft1-bar"></div></div>
+    <div class="trim-val" id="stft1-val">—</div>
+  </div>
+  <div class="trim-row">
+    <div class="trim-label">LTFT B1</div>
+    <div class="trim-track"><div class="trim-fill" id="ltft1-bar"></div></div>
+    <div class="trim-val" id="ltft1-val">—</div>
+  </div>
+  <div class="trim-row">
+    <div class="trim-label">STFT B2</div>
+    <div class="trim-track"><div class="trim-fill" id="stft2-bar"></div></div>
+    <div class="trim-val" id="stft2-val">—</div>
+  </div>
+  <div class="trim-row">
+    <div class="trim-label">LTFT B2</div>
+    <div class="trim-track"><div class="trim-fill" id="ltft2-bar"></div></div>
+    <div class="trim-val" id="ltft2-val">—</div>
+  </div>
+</div>
+
+<!-- O2 sensors -->
+<div class="section-title">O2 Sensors</div>
+<div class="o2-wrap">
+  <div class="o2-card">
+    <div class="o2-label">B1 S1 (upstream)</div>
+    <div class="o2-volt" id="o2-b1s1">—</div>
+    <div class="o2-bar-wrap"><div class="o2-bar" id="o2-b1s1-bar"></div></div>
+  </div>
+  <div class="o2-card">
+    <div class="o2-label">B2 S1 (upstream)</div>
+    <div class="o2-volt" id="o2-b2s1">—</div>
+    <div class="o2-bar-wrap"><div class="o2-bar" id="o2-b2s1-bar"></div></div>
+  </div>
+</div>
+
+<footer></footer>
+
+<script>
+// ── RPM Arc Gauge ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('rpm-gauge');
+const ctx = canvas.getContext('2d');
+const MAX_RPM = 7000;
+let currentRpm = 0, targetRpm = 0;
+
+function drawGauge(rpm) {
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H - 20;
+  const r = Math.min(cx, cy) - 10;
+  const startA = Math.PI, endA = 2 * Math.PI;
+  const pct = Math.min(rpm / MAX_RPM, 1);
+  const fillA = startA + pct * Math.PI;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Track
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startA, endA);
+  ctx.strokeStyle = '#1e2235';
+  ctx.lineWidth = 14;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Fill
+  if (pct > 0) {
+    const grad = ctx.createLinearGradient(cx - r, cy, cx + r, cy);
+    grad.addColorStop(0,   '#4ade80');
+    grad.addColorStop(0.6, '#fbbf24');
+    grad.addColorStop(1,   '#f87171');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startA, fillA);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  // Tick marks
+  for (let i = 0; i <= 7; i++) {
+    const a = Math.PI + (i / 7) * Math.PI;
+    const x1 = cx + (r - 18) * Math.cos(a), y1 = cy + (r - 18) * Math.sin(a);
+    const x2 = cx + (r - 8)  * Math.cos(a), y2 = cy + (r - 8)  * Math.sin(a);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.strokeStyle = i * 1000 >= rpm ? '#2e3250' : '#5a5f7a';
+    ctx.lineWidth = 2; ctx.stroke();
+    // Label
+    const lx = cx + (r - 30) * Math.cos(a), ly = cy + (r - 30) * Math.sin(a);
+    ctx.fillStyle = '#5a5f7a'; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(i, lx, ly);
+  }
+
+  // RPM number
+  ctx.fillStyle = '#e2e4f0';
+  ctx.font = `bold ${Math.floor(W * 0.18)}px -apple-system,Roboto,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(Math.round(rpm), cx, cy - r * 0.3);
+}
+
+function animateGauge() {
+  currentRpm += (targetRpm - currentRpm) * 0.15;
+  drawGauge(currentRpm);
+  requestAnimationFrame(animateGauge);
+}
+animateGauge();
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function set(id, val, decimals = 0) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val == null ? '—' : Number(val).toFixed(decimals);
+}
+
+function trimBar(barId, valId, val) {
+  const bar = document.getElementById(barId);
+  const lbl = document.getElementById(valId);
+  if (!bar || !lbl) return;
+  const pct = Math.min(Math.abs(val || 0) / 25, 1) * 50; // 25% = full half
+  const positive = (val || 0) >= 0;
+  const warn = Math.abs(val || 0) > 10;
+  bar.style.width = pct + '%';
+  bar.style.left = positive ? '50%' : (50 - pct) + '%';
+  bar.style.background = warn ? 'var(--yellow)' : 'var(--green)';
+  lbl.textContent = val == null ? '—' : (val >= 0 ? '+' : '') + Number(val).toFixed(1) + '%';
+  lbl.style.color = warn ? 'var(--yellow)' : 'var(--green)';
+}
+
+function o2Bar(barId, volt) {
+  const bar = document.getElementById(barId);
+  if (!bar) return;
+  const pct = Math.min((volt || 0) / 1.0, 1) * 100;
+  // Green when switching (0.3-0.7), red when stuck
+  bar.style.width = pct + '%';
+  bar.style.background = (volt > 0.2 && volt < 0.8) ? 'var(--green)' : 'var(--orange)';
+}
+
+function cardState(id, warn, alert) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'card' + (alert ? ' alert' : warn ? ' warn' : '');
+}
+
+// ── SSE ────────────────────────────────────────────────────────────────────
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('status-text');
+let reconnectTimer;
+
+function connect() {
+  const es = new EventSource('/stream');
+
+  es.onopen = () => {
+    dot.className = 'dot live';
+    statusText.textContent = 'Live';
+    clearTimeout(reconnectTimer);
+  };
+
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+
+    if (!d._connected) {
+      dot.className = 'dot dead';
+      statusText.textContent = 'OBD disconnected';
+      return;
+    }
+
+    dot.className = d._demo ? 'dot demo' : 'dot live';
+    statusText.textContent = d._demo ? 'Demo' : 'Live';
+
+    // RPM gauge
+    targetRpm = d.RPM ?? 0;
+
+    // Core metrics
+    set('v-speed',   d.SPEED, 0);
+    set('v-load',    d.ENGINE_LOAD, 1);
+    set('v-coolant', d.COOLANT_TEMP, 0);
+    set('v-intake',  d.INTAKE_TEMP, 0);
+    set('v-maf',     d.MAF, 2);
+    set('v-timing',  d.TIMING_ADVANCE, 1);
+
+    // Card states
+    cardState('card-coolant', d.COOLANT_TEMP > 100, d.COOLANT_TEMP > 110);
+    cardState('card-load',    d.ENGINE_LOAD > 70,   d.ENGINE_LOAD > 90);
+
+    // Fuel trims
+    trimBar('stft1-bar', 'stft1-val', d.SHORT_FUEL_TRIM_1);
+    trimBar('ltft1-bar', 'ltft1-val', d.LONG_FUEL_TRIM_1);
+    trimBar('stft2-bar', 'stft2-val', d.SHORT_FUEL_TRIM_2);
+    trimBar('ltft2-bar', 'ltft2-val', d.LONG_FUEL_TRIM_2);
+
+    // O2
+    const o2_b1 = d.O2_B1S1;
+    const o2_b2 = d.O2_B2S1;
+    document.getElementById('o2-b1s1').textContent = o2_b1 != null ? o2_b1.toFixed(3) + ' V' : '—';
+    document.getElementById('o2-b2s1').textContent = o2_b2 != null ? o2_b2.toFixed(3) + ' V' : '—';
+    o2Bar('o2-b1s1-bar', o2_b1);
+    o2Bar('o2-b2s1-bar', o2_b2);
+  };
+
+  es.onerror = () => {
+    dot.className = 'dot dead';
+    statusText.textContent = 'Reconnecting…';
+    es.close();
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+}
+
+connect();
+</script>
+</body>
+</html>
