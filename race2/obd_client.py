@@ -8,7 +8,7 @@ from rich.console import Console
 console = Console()
 
 DEFAULT_PORT = "/dev/cu.usbserial-223230327733"
-DEFAULT_BAUD = 38400
+DEFAULT_BAUD = 115200
 
 SENSOR_COMMANDS = [
     obd.commands.RPM,

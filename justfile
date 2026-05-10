@@ -30,3 +30,7 @@ snapshot:
 # Record 60 seconds of live data
 record duration="60":
     uv run race2 record --duration {{duration}}
+
+# Discover all PIDs the ECU actually supports
+discover:
+    uv run race2 discover

@@ -130,3 +130,48 @@ def record(ctx: click.Context, interval: float, duration: int, out: str | None) 
 
     conn.close()
     console.print(f"\n[bold green]Done![/] Saved → {out_path}")
+
+
+@main.command()
+@click.option("--out", "-o", default=None, help="Optional JSON output file.")
+@click.pass_context
+def discover(ctx: click.Context, out: str | None) -> None:
+    """Query every PID the ECU reports as supported — finds hidden data."""
+    conn = connect(ctx.obj["port"], ctx.obj["baud"])
+
+    supported = sorted(conn.supported_commands, key=lambda c: c.name)
+    console.print(f"\n[bold cyan]ECU supports {len(supported)} PIDs[/]\n")
+
+    table = Table(title="All Supported Sensors", show_header=True)
+    table.add_column("PID", style="dim")
+    table.add_column("Name", style="cyan")
+    table.add_column("Value", style="yellow")
+    table.add_column("Description")
+
+    data: dict[str, str | None] = {}
+    for cmd in supported:
+        # Skip meta/control commands (mode != 1 and mode != 9)
+        if not hasattr(cmd, "mode") or cmd.mode not in (1, 9):
+            continue
+        try:
+            resp = conn.query(cmd)
+            val = str(resp.value) if not resp.is_null() else None
+        except Exception:  # noqa: BLE001
+            val = None
+        data[cmd.name] = val
+        pid_hex = f"{cmd.mode:02X}{cmd.pid:02X}" if hasattr(cmd, "pid") else "—"
+        table.add_row(
+            pid_hex,
+            cmd.name,
+            val or "[dim]N/A[/dim]",
+            cmd.desc if hasattr(cmd, "desc") else "",
+        )
+
+    console.print(table)
+
+    out_path = Path(out) if out else Path(f"obd_discover_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+    payload = {"timestamp": datetime.now().isoformat(), "pid_count": len(supported), "sensors": data}
+    out_path.write_text(json.dumps(payload, indent=2))
+    console.print(f"\n[dim]Saved → {out_path}[/dim]")
+
+    conn.close()
