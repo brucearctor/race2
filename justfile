@@ -34,3 +34,11 @@ record duration="60":
 # Discover all PIDs the ECU actually supports
 discover:
     uv run race2 discover
+
+# Launch analysis dashboard
+dashboard:
+    uv run streamlit run race2/dashboard.py
+
+# Generate demo data for dashboard testing
+demo-data:
+    uv run python3 -c "from race2.sample_data import write_sample_csv, write_sample_snapshot; from pathlib import Path; write_sample_csv(Path('sample_session.csv')); write_sample_snapshot(Path('sample_snapshot.json'))"
